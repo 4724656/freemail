@@ -23,7 +23,8 @@ export async function handleEmailEvent(message, env, ctx) {
     const headers = message.headers;
     const toHeader = headers.get('to') || headers.get('To') || '';
     const fromHeader = headers.get('from') || headers.get('From') || '';
-    const subject = headers.get('subject') || headers.get('Subject') || '(无主题)';
+    const subjectRaw = headers.get('subject') || headers.get('Subject') || '(无主题)';
+    const subject = decodeRFC2047(subjectRaw);
 
     let envelopeTo = '';
     try {
@@ -126,4 +127,23 @@ export async function handleEmailEvent(message, env, ctx) {
   } catch (err) {
     console.error('Email event handling error:', err);
   }
+}
+// 添加 RFC 2047 邮件主题解码函数
+function decodeRFC2047(encoded) {
+  if (!encoded) return '';
+  return encoded.replace(/=\?([^?]+)\?([BQbq])\?([^?]+)\?=/gi, (match, charset, encoding, text) => {
+    try {
+      if (encoding.toUpperCase() === 'B') {
+        const bytes = atob(text).split('').map(c => c.charCodeAt(0));
+        return new TextDecoder(charset.toLowerCase()).decode(new Uint8Array(bytes));
+      } else if (encoding.toUpperCase() === 'Q') {
+        const bytes = text.replace(/_/g, ' ').replace(/=([0-9A-Fa-f]{2})/g, (m, hex) => 
+          String.fromCharCode(parseInt(hex, 16))).split('').map(c => c.charCodeAt(0));
+        return new TextDecoder(charset.toLowerCase()).decode(new Uint8Array(bytes));
+      }
+    } catch (e) {
+      return match;
+    }
+    return match;
+  });
 }
